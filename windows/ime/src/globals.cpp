@@ -1,7 +1,5 @@
-// mingw only: instantiate the TSF GUIDs the SDK ships in uuid.lib (selectany).
-#if defined(__MINGW32__)
+// mingw: instantiate TSF GUIDs; MSVC: instantiate inputscope.h GUIDs not in uuid.lib.
 #include <initguid.h>
-#endif
 #include "globals.h"
 #include "tsf_compat.h"
 

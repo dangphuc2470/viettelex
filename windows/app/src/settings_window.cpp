@@ -27,6 +27,7 @@
 #include <msi.h>
 #include <uxtheme.h>
 
+#include <objidl.h>
 #include <algorithm>
 namespace Gdiplus {
 using std::max;

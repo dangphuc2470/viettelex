@@ -1,5 +1,6 @@
 #include "direct_verify.h"
 
+#include <objbase.h>
 #include <uiautomation.h>
 
 #include <atomic>
