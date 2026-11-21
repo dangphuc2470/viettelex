@@ -85,20 +85,24 @@ inline Tone vniTone(uint8_t d) {
     default: return Tone::None;
     }
 }
-inline Mark vniMark(uint8_t d) {
-    switch (d) {
-    case '6': return Mark::Circumflex; case '7': return Mark::Horn;
-    case '8': return Mark::Breve; case '9': return Mark::Bar;
-    default: return Mark::None;
-    }
-}
-inline bool vniMarkAccepts(uint8_t base, Mark mark) {
-    switch (mark) {
-    case Mark::Circumflex: return base == 'a' || base == 'e' || base == 'o';
-    case Mark::Horn: return base == 'o' || base == 'u';
-    case Mark::Breve: return base == 'a';
-    case Mark::Bar: return base == 'd';
-    default: return false;
+inline Mark vniMarkForBase(uint8_t key, uint8_t base, bool strictVni) {
+    switch (key) {
+    case '6':
+        if (base == 'a' || base == 'e' || base == 'o') return Mark::Circumflex;
+        return Mark::None;
+    case '7':
+        if (!strictVni && base == 'a') return Mark::Breve;
+        if (base == 'o' || base == 'u') return Mark::Horn;
+        return Mark::None;
+    case '8':
+        if (base == 'a') return Mark::Breve;
+        if (!strictVni && (base == 'o' || base == 'u')) return Mark::Horn;
+        return Mark::None;
+    case '9':
+        if (base == 'd') return Mark::Bar;
+        return Mark::None;
+    default:
+        return Mark::None;
     }
 }
 inline uint8_t quickTelexSecond(uint8_t c) {
@@ -238,7 +242,7 @@ void TelexEngine::takeSnapshots() {
 void TelexEngine::feedAscii(uint8_t ascii, Action& out) {
     if (rawCount_ == 0 && retroHasPending_) retroHasPending_ = false;
     bool bu;
-    if (!(isLetter(ascii) || (vniMode && isDigit(ascii)) || (bracketVowels && bracketBase(ascii, bu) != 0))) {
+    if (!(isLetter(ascii) || ((vniMode || vniEnabled) && isDigit(ascii)) || (bracketVowels && bracketBase(ascii, bu) != 0))) {
         setSimple(out, Action::Passthrough);
         return;
     }
@@ -258,6 +262,7 @@ void TelexEngine::feedAscii(uint8_t ascii, Action& out) {
         rebuildFrozenAware();
     } else if (pProcessed_ != rawCount_ - 1 || pFreeMarking_ != freeMarking ||
                pSimpleTelex_ != simpleTelex || pQuickTelex_ != quickTelex || pVniMode_ != vniMode ||
+               pTelexEnabled_ != telexEnabled || pVniEnabled_ != vniEnabled ||
                pBracketVowels_ != bracketVowels) {
         rebuildFrozenAware();
     } else {
@@ -1901,6 +1906,8 @@ void TelexEngine::rebuildParseState() {
     pSimpleTelex_ = simpleTelex;
     pQuickTelex_ = quickTelex;
     pVniMode_ = vniMode;
+    pTelexEnabled_ = telexEnabled;
+    pVniEnabled_ = vniEnabled;
     pBracketVowels_ = bracketVowels;
     pLiveSpellCheck_ = liveSpellCheck;
     pFreezeLetters_ = -1;
@@ -1931,7 +1938,12 @@ void TelexEngine::parseStep(int at) {
         }
     }
 
-    if (pVniMode_) { parseStepVNI(at, key, lower, upper); return; }
+    if ((pVniMode_ || pVniEnabled_) && isDigit(key)) { parseStepVNI(at, key, lower, upper); return; }
+    if (pVniMode_ || !pTelexEnabled_) {
+        appendLetter(lower, Mark::None, upper);
+        rawLetter_[at] = pCount_ - 1;
+        return;
+    }
 
     // Tone keys: s f r x j
     Tone t = toneForKey(lower);
@@ -2191,32 +2203,42 @@ void TelexEngine::parseStepVNI(int at, uint8_t key, uint8_t lower, bool upper) {
         }
         return;
     }
-    const Mark mark = vniMark(key);
-    if (mark != Mark::None) {
+    if (key == '6' || key == '7' || key == '8' || key == '9') {
+        const bool strictVni = pVniMode_ && !pVniEnabled_;
         for (int k = pCount_ - 1; k >= 0; --k) {
-            if (vniMarkAccepts(letters_[k].base, mark)) {
+            const Mark mark = vniMarkForBase(key, letters_[k].base, strictVni);
+            if (mark != Mark::None) {
                 int target = k;
-                if (mark == Mark::Horn && target >= 1 && letters_[target].base == 'u' &&
+                if (!strictVni && (key == '7' || key == '8') && target >= 1 && letters_[target].base == 'a' &&
                     letters_[target].mark == Mark::None && letters_[target - 1].base == 'u' &&
+                    uaUuPredecessorAllowsRetarget(target - 1) &&
                     !(target >= 2 && letters_[target - 2].base == 'q'))
                     target -= 1;
+                if ((key == '7' || (!strictVni && key == '8')) && target >= 1 && letters_[target].base == 'u' &&
+                    letters_[target].mark == Mark::None && letters_[target - 1].base == 'u' &&
+                    uaUuPredecessorAllowsRetarget(target - 1) &&
+                    !(target >= 2 && letters_[target - 2].base == 'q'))
+                    target -= 1;
+                const Mark effectiveMark = (target != k)
+                    ? vniMarkForBase(key, letters_[target].base, strictVni)
+                    : mark;
                 if (letters_[target].mark == Mark::None) {
-                    letters_[target].mark = mark;
+                    letters_[target].mark = effectiveMark;
                     rawLetter_[at] = target;
                     return;
                 }
-                if (letters_[target].mark == mark) {
+                if (letters_[target].mark == effectiveMark) {
                     letters_[target].mark = Mark::None;
                     pCancelled_ = true;
                     appendLetter(key, Mark::None, false);
                     rawLetter_[at] = pCount_ - 1;
                     return;
                 }
-                // Hat <-> hook/breve swap (issue #149): 8 on â -> ă, 6 on ă -> â,
-                // 7 on ô -> ơ, 6 on ơ -> ô (ươ -> uô via setCircumflex). Tone kept.
+                // Hat <-> hook/breve swap (issue #149): 7/8 on â -> ă, 6 on ă -> â,
+                // 7/8 on ô -> ơ, 6 on ơ -> ô (ươ -> uô via setCircumflex). Tone kept.
                 if (letters_[target].mark != Mark::Bar) {
-                    if (mark == Mark::Circumflex) setCircumflex(target);
-                    else letters_[target].mark = mark;
+                    if (effectiveMark == Mark::Circumflex) setCircumflex(target);
+                    else letters_[target].mark = effectiveMark;
                     rawLetter_[at] = target;
                     return;
                 }

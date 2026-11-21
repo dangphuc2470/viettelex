@@ -781,6 +781,28 @@ void autoCircumflex() {
         CHECK_EQ(acCommit(w), acCommit(w, false));
 }
 
+void dualTelexAndVni() {
+    auto dualCompose = [](const char* keys, bool telex = true, bool vni = true) {
+        vtx::TelexEngine e;
+        e.telexEnabled = telex;
+        e.vniEnabled = vni;
+        feedStr(e, keys);
+        return composed(e);
+    };
+    CHECK_EQ(dualCompose("vieetj"), std::string("việt"));
+    CHECK_EQ(dualCompose("vie65t"), std::string("việt"));
+    CHECK_EQ(dualCompose("tan7"), std::string("tăn"));
+    CHECK_EQ(dualCompose("tan8"), std::string("tăn"));
+    CHECK_EQ(dualCompose("mua7"), std::string("mưa"));
+    CHECK_EQ(dualCompose("mua8"), std::string("mưa"));
+    CHECK_EQ(dualCompose("luu7"), std::string("lưu"));
+    CHECK_EQ(dualCompose("luu8"), std::string("lưu"));
+    CHECK_EQ(dualCompose("d9"), std::string("đ"));
+    // Telex disabled, VNI enabled -> Telex keys are literal, VNI works.
+    CHECK_EQ(dualCompose("vieetj", false, true), std::string("vieetj"));
+    CHECK_EQ(dualCompose("vie65t", false, true), std::string("việt"));
+}
+
 } // namespace
 
 int runUnit() {
@@ -802,6 +824,7 @@ int runUnit() {
     spellingErrorCases();
     backspaceEqualsRetypeWithoutLastKey();
     autoCircumflex();
+    dualTelexAndVni();
     std::printf("unit invariants: %d/%d pass\n", gPass, gPass + gFail);
     return gFail == 0 ? 0 : 1;
 }

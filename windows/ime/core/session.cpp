@@ -125,7 +125,7 @@ bool TypingSession::wordActive() const { return engine_ && (overflow_ || !vtx_is
 
 bool TypingSession::isWordKey(char32_t c) const {
     if (isAsciiLetter(c)) return true;
-    if ((opt_.engineFlags & VTX_VNI) && isAsciiDigit(c)) return true;
+    if ((opt_.engineFlags & (VTX_VNI | VTX_VNI_ENABLED)) && isAsciiDigit(c)) return true;
     if ((opt_.engineFlags & VTX_BRACKET_VOWELS) && (c == U'[' || c == U']' || c == U'{' || c == U'}'))
         return true;
     return false;
@@ -552,7 +552,9 @@ bool TypingSession::handleWordKey(char32_t c, TextSink& sink) {
         (!comp || !sink.compositionActive())) {
         if (tryReEdit(c, sink)) return true;
     } else if (opt_.verboseLog && vtx_is_empty(engine_) && opt_.reEditWord &&
-               isDiacriticOnlyKey(c, (opt_.engineFlags & VTX_VNI) != 0) && !sink.blind() &&
+               (((opt_.engineFlags & (VTX_VNI | VTX_VNI_ENABLED)) != 0 && isAsciiDigit(c)) ||
+                ((opt_.engineFlags & (VTX_VNI | VTX_TELEX_DISABLED)) == 0 && isDiacriticOnlyKey(c, false))) &&
+               !sink.blind() &&
                isWordCharForReEdit(lastOf(sink.textBeforeCaret(1)))) {
         // A tone key right after a word (no space) cannot reach back into it here.
         std::string why = "re-edit: a tone key right after a word, reaching back is off here (";
@@ -628,8 +630,10 @@ bool TypingSession::handleWordKey(char32_t c, TextSink& sink) {
 bool TypingSession::tryReEdit(char32_t c, TextSink& sink) {
     // macOS isDiacriticOnlyKey: only keys that can ONLY add a diacritic reach back into
     // the word before the caret (s f r x j z w; VNI digits). Doubling letters (a e o d)
-    // are ordinary letters too — "ca" + "a" must stay "caa".
-    if (!isDiacriticOnlyKey(c, (opt_.engineFlags & VTX_VNI) != 0)) return false;
+    const bool vniActive = (opt_.engineFlags & (VTX_VNI | VTX_VNI_ENABLED)) != 0;
+    const bool telexActive = (opt_.engineFlags & (VTX_VNI | VTX_TELEX_DISABLED)) == 0;
+    const bool isDiacritic = (vniActive && isAsciiDigit(c)) || (telexActive && isDiacriticOnlyKey(c, false));
+    if (!isDiacritic) return false;
     // From here on the key IS a re-edit candidate: every refusal names its reason in the
     // debug log (#163 — silent exits made the feature look dead; lengths only, never text).
     // Caret inside a word ("việ|t"): seeding the left half would rewrite half a word.

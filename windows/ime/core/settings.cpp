@@ -44,6 +44,7 @@ const BoolKey kBoolKeys[] = {
     {"switchSound", &Settings::switchSound},
     // ---- extension word (bit 32 on): see serialize() ----
     {"autoCircumflex", &Settings::autoCircumflex},
+    {"vniEnabled", &Settings::vniEnabled},
 };
 constexpr size_t kBoolCount = sizeof(kBoolKeys) / sizeof(kBoolKeys[0]);
 constexpr uint32_t kMagic = 0x53585456;  // "VTXS"
@@ -99,6 +100,7 @@ uint32_t Settings::engineFlags() const {
     if (bracketVowels) f |= VTX_BRACKET_VOWELS;
     if (autoCircumflex) f |= VTX_AUTO_CIRCUMFLEX;
     if (vniMode) f |= VTX_VNI;
+    if (vniEnabled) f |= VTX_VNI_ENABLED;
     if (contextualEnglish) f |= VTX_CONTEXTUAL_ENGLISH;
     if (collisionPrefersVietnamese) f |= VTX_COLLISION_PREFERS_VI;
     if (retro::flagWanted(contextualEnglish, retroactiveEnglish)) {

@@ -21,6 +21,7 @@ namespace vtx {
 struct Settings {
     // Kiểu gõ
     bool vniMode = false;
+    bool vniEnabled = false;
     bool simpleTelex = false;
     bool freeMarking = true;
     bool quickTelex = false;

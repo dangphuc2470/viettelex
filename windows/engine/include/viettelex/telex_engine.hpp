@@ -72,6 +72,8 @@ public:
     bool quickTelex = false;
     bool bracketVowels = false;
     bool vniMode = false;
+    bool telexEnabled = true;
+    bool vniEnabled = false;
     bool contextualEnglish = false;
     bool englishWordRestore = true;
     bool collisionPrefersVietnamese = false;
@@ -214,6 +216,8 @@ private:
     bool pSimpleTelex_ = false;
     bool pQuickTelex_ = false;
     bool pVniMode_ = false;
+    bool pTelexEnabled_ = true;
+    bool pVniEnabled_ = false;
     bool pBracketVowels_ = false;
     bool pLiveSpellCheck_ = false;
 

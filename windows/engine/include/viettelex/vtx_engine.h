@@ -44,8 +44,10 @@ enum {
                                             CONTEXTUAL_ENGLISH, inert without it)        */
     VTX_ENGLISH_BY_FREQUENCY= 1u << 13,  /* englishByFrequency (EXPERIMENTAL, OFF; inert
                                             unless RETRO_ENGLISH is in effect)           */
-    VTX_AUTO_CIRCUMFLEX     = 1u << 14   /* autoCircumflex (OFF): vietj -> việt, benhj ->
+    VTX_AUTO_CIRCUMFLEX     = 1u << 14,  /* autoCircumflex (OFF): vietj -> việt, benhj ->
                                             bệnh when the plain rime is not a syllable   */
+    VTX_TELEX_DISABLED      = 1u << 15,  /* !telexEnabled (OFF = Telex active)           */
+    VTX_VNI_ENABLED         = 1u << 16   /* vniEnabled (OFF; dual Telex + VNI when set)  */
 };
 /* Engine defaults (== Swift TelexEngine()): TEENCODE | ENGLISH_WORD_RESTORE. */
 #define VTX_ENGINE_DEFAULT_FLAGS (VTX_TEENCODE | VTX_ENGLISH_WORD_RESTORE)

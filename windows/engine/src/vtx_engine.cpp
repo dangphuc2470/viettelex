@@ -47,6 +47,8 @@ void vtx_set_flags(vtx_engine* h, uint32_t f) {
     e.retroactiveEnglish = (f & VTX_RETRO_ENGLISH) != 0;
     e.englishByFrequency = (f & VTX_ENGLISH_BY_FREQUENCY) != 0;
     e.autoCircumflex = (f & VTX_AUTO_CIRCUMFLEX) != 0;
+    e.telexEnabled = (f & VTX_TELEX_DISABLED) == 0;
+    e.vniEnabled = (f & VTX_VNI_ENABLED) != 0;
 }
 
 uint32_t vtx_get_flags(const vtx_engine* h) {
@@ -68,6 +70,8 @@ uint32_t vtx_get_flags(const vtx_engine* h) {
     if (e.retroactiveEnglish) f |= VTX_RETRO_ENGLISH;
     if (e.englishByFrequency) f |= VTX_ENGLISH_BY_FREQUENCY;
     if (e.autoCircumflex) f |= VTX_AUTO_CIRCUMFLEX;
+    if (!e.telexEnabled) f |= VTX_TELEX_DISABLED;
+    if (e.vniEnabled) f |= VTX_VNI_ENABLED;
     return f;
 }
 
