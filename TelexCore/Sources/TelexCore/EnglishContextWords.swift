@@ -310,7 +310,7 @@ enum EnglishContextWords {
         // word; alone they stay Vietnamese. The `never` rows (cos→có, sex→sẽ, max→mã,
         // this→thí…) are DELIBERATELY excluded — they collide with COMMON Vietnamese.
         """
-        air ais ams ans arm asn asp bangs barn
+        air ais ams ans arm asn asp bangs
         beer beest bens best bins bits bons boost boots born
         burn cans caps cast cats chair chans chaos charm
         chens chest chips choes choir chose cons corn cost

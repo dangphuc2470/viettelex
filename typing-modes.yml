@@ -56,6 +56,8 @@ com.bytedance.macos.feishu: tap
 com.tinyspeck.slackmacgap: tap
 com.hnc.Discord: tap
 com.microsoft.VSCode: tap
+com.google.antigravity: tap
+com.google.antigravity-ide: tap
 com.anthropic.claudefordesktop: tap
 notion.id: tap
 md.obsidian: tap
@@ -156,6 +158,8 @@ com.apple.mail: inPlace
 # Scripts/ime-drive.swift). Marked: cùng chuỗi phím, không deactivate, đủ chữ. Tap
 # vẫn hỏng như ghi trên → marked là kênh còn lại (giá: gạch chân).
 app.cyan.markedit: marked
+# NotepadMac (Tauri / CodeMirror 6 trong WKWebView): cùng lớp MarkEdit ở trên
+com.phucdnh.notepad: marked
 # Browsers — tự dò theo ô (address bar vs nội dung trang)
 com.apple.Safari: axDetect
 com.apple.SafariTechnologyPreview: axDetect

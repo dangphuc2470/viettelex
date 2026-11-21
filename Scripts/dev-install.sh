@@ -11,8 +11,10 @@
 # sandboxed entitlements live in VietTelex-MAS.entitlements (App Store only).
 set -e
 cd "$(dirname "$0")/.."
-
-SIGN_ID="Developer ID Application: SENPRINTS LLC (84T567KMYD)"
+SIGN_ID="${VIETTELEX_SIGN_ID:-Developer ID Application: SENPRINTS LLC (84T567KMYD)}"
+if ! security find-certificate -c "$SIGN_ID" >/dev/null 2>&1; then
+  SIGN_ID="-"
+fi
 DEST="$HOME/Library/Input Methods/VietTelex.app"
 
 # FIXED derived path — the default DerivedData grows one dir per xcodegen

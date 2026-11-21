@@ -292,4 +292,187 @@ final class VNITests: XCTestCase {
         for ch in "a1" { _ = e.feed(ch) }           // now digits are inert again
         XCTAssertEqual(e.composed, "a")
     }
+
+    // Dual VNI + Simple Telex mode: both typing styles are active simultaneously.
+    func testDualVNISimpleTelexMode() {
+        var e = TelexEngine()
+        e.vniEnabled = true
+        e.telexEnabled = true
+        e.simpleTelex = true
+
+        // 1. Telex words compose
+        for ch in "toans" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "toán")
+        _ = e.commitText(autoRestore: true)
+
+        // 2. VNI words compose
+        for ch in "toan1" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "toán")
+        _ = e.commitText(autoRestore: true)
+
+        // 3. Simple Telex standalone w stays literal
+        for ch in "cw" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "cw")
+        _ = e.commitText(autoRestore: true)
+
+        // 4. uw and u7 both type ư
+        for ch in "cuw" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "cư")
+        _ = e.commitText(autoRestore: true)
+
+        for ch in "cu7" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "cư")
+        _ = e.commitText(autoRestore: true)
+
+        // 5. Complex syllables: vie6t5 (VNI) vs vieejt (Telex)
+        for ch in "vie6t5" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "việt")
+        _ = e.commitText(autoRestore: true)
+
+        for ch in "vieejt" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "việt")
+        _ = e.commitText(autoRestore: true)
+
+        // 6. d9uong7 vs dduowng (đương), d9uong72 vs dduowngf (đường)
+        for ch in "d9uong7" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "đương")
+        _ = e.commitText(autoRestore: true)
+
+        for ch in "dduowng" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "đương")
+        _ = e.commitText(autoRestore: true)
+
+        for ch in "d9uong72" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "đường")
+        _ = e.commitText(autoRestore: true)
+
+        for ch in "dduowngf" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "đường")
+    }
+
+    // When Telex is disabled (English mode), Telex keys stay literal, but VNI stays active.
+    func testVNIAlwaysOnWhenTelexDisabled() {
+        var e = TelexEngine()
+        e.vniEnabled = true
+        e.telexEnabled = false
+
+        // English words with Telex trigger keys stay verbatim
+        for ch in "for" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "for")
+        _ = e.commitText(autoRestore: true)
+
+        for ch in "class" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "class")
+        _ = e.commitText(autoRestore: true)
+
+        for ch in "while" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "while")
+        _ = e.commitText(autoRestore: true)
+
+        for ch in "string" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "string")
+        _ = e.commitText(autoRestore: true)
+
+        // Telex keys don't compose
+        for ch in "toans" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "toans")
+        _ = e.commitText(autoRestore: true)
+
+        // But VNI digits DO compose into Vietnamese!
+        for ch in "toan1" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "toán")
+        _ = e.commitText(autoRestore: true)
+
+        for ch in "vie6t5" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "việt")
+        _ = e.commitText(autoRestore: true)
+
+        for ch in "d9" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "đ")
+    }
+
+    // 7 and 8 unified: typing either 7 or 8 on a gives ă, on o gives ơ, on u gives ư.
+    func testUnifySevenAndEight() {
+        var e = TelexEngine()
+        e.vniMode = true
+
+        // 1. 'a' with 7 or 8 -> ă
+        for ch in "a7" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "ă")
+        _ = e.commitText(autoRestore: true)
+
+        for ch in "a8" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "ă")
+        _ = e.commitText(autoRestore: true)
+
+        // 2. 'o' with 7 or 8 -> ơ
+        for ch in "o7" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "ơ")
+        _ = e.commitText(autoRestore: true)
+
+        for ch in "o8" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "ơ")
+        _ = e.commitText(autoRestore: true)
+
+        // 3. 'u' with 7 or 8 -> ư
+        for ch in "u7" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "ư")
+        _ = e.commitText(autoRestore: true)
+
+        for ch in "u8" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "ư")
+        _ = e.commitText(autoRestore: true)
+
+        // 4. 'ua' nucleus -> ưa (both 7 and 8)
+        for ch in "mua7" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "mưa")
+        _ = e.commitText(autoRestore: true)
+
+        for ch in "mua8" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "mưa")
+        _ = e.commitText(autoRestore: true)
+
+        // 5. Coda reach-back: mang7 and mang8 -> măng
+        for ch in "mang7" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "măng")
+        _ = e.commitText(autoRestore: true)
+
+        for ch in "mang8" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "măng")
+        _ = e.commitText(autoRestore: true)
+
+        // 6. Coda reach-back: uong7 and uong8 -> ương
+        for ch in "uong7" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "ương")
+        _ = e.commitText(autoRestore: true)
+
+        for ch in "uong8" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "ương")
+        _ = e.commitText(autoRestore: true)
+
+        // 7. Cancelling with double press
+        for ch in "a77" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "a7")
+        _ = e.commitText(autoRestore: true)
+
+        for ch in "a88" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "a8")
+        _ = e.commitText(autoRestore: true)
+
+        for ch in "o77" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "o7")
+        _ = e.commitText(autoRestore: true)
+
+        for ch in "o88" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "o8")
+        _ = e.commitText(autoRestore: true)
+
+        for ch in "u77" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "u7")
+        _ = e.commitText(autoRestore: true)
+
+        for ch in "u88" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "u8")
+    }
 }
+

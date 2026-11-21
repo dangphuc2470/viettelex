@@ -2134,7 +2134,10 @@ enum SyntheticKeyboard {
             postUnicode(text)
             return
         }
-        for _ in 0..<max(0, backspaces) { postVirtual(CGKeyCode(kVK_Delete)) }
+        for _ in 0..<max(0, backspaces) {
+            postVirtual(CGKeyCode(kVK_Delete))
+            usleep(2500)
+        }
         if !text.isEmpty { postUnicode(text) }
     }
 
@@ -2331,7 +2334,9 @@ enum SyntheticKeyboard {
     }
 
     private static func postUnicode(_ text: String) {
-        for chunk in unicodeInsertChunks(text) {
+        let chunks = unicodeInsertChunks(text)
+        for (i, chunk) in chunks.enumerated() {
+            if i > 0 { usleep(2500) }
             if isLineBreakChunk(chunk) { postShiftReturn() } else { postUnicodeChunk(chunk) }
         }
     }
@@ -2365,13 +2370,68 @@ enum SyntheticKeyboard {
     }
     #endif
 
+    private static func keyCodeForAscii(_ ch: Character) -> CGKeyCode {
+        switch ch {
+        case "a", "A": return CGKeyCode(kVK_ANSI_A)
+        case "b", "B": return CGKeyCode(kVK_ANSI_B)
+        case "c", "C": return CGKeyCode(kVK_ANSI_C)
+        case "d", "D": return CGKeyCode(kVK_ANSI_D)
+        case "e", "E": return CGKeyCode(kVK_ANSI_E)
+        case "f", "F": return CGKeyCode(kVK_ANSI_F)
+        case "g", "G": return CGKeyCode(kVK_ANSI_G)
+        case "h", "H": return CGKeyCode(kVK_ANSI_H)
+        case "i", "I": return CGKeyCode(kVK_ANSI_I)
+        case "j", "J": return CGKeyCode(kVK_ANSI_J)
+        case "k", "K": return CGKeyCode(kVK_ANSI_K)
+        case "l", "L": return CGKeyCode(kVK_ANSI_L)
+        case "m", "M": return CGKeyCode(kVK_ANSI_M)
+        case "n", "N": return CGKeyCode(kVK_ANSI_N)
+        case "o", "O": return CGKeyCode(kVK_ANSI_O)
+        case "p", "P": return CGKeyCode(kVK_ANSI_P)
+        case "q", "Q": return CGKeyCode(kVK_ANSI_Q)
+        case "r", "R": return CGKeyCode(kVK_ANSI_R)
+        case "s", "S": return CGKeyCode(kVK_ANSI_S)
+        case "t", "T": return CGKeyCode(kVK_ANSI_T)
+        case "u", "U": return CGKeyCode(kVK_ANSI_U)
+        case "v", "V": return CGKeyCode(kVK_ANSI_V)
+        case "w", "W": return CGKeyCode(kVK_ANSI_W)
+        case "x", "X": return CGKeyCode(kVK_ANSI_X)
+        case "y", "Y": return CGKeyCode(kVK_ANSI_Y)
+        case "z", "Z": return CGKeyCode(kVK_ANSI_Z)
+        case "0": return CGKeyCode(kVK_ANSI_0)
+        case "1": return CGKeyCode(kVK_ANSI_1)
+        case "2": return CGKeyCode(kVK_ANSI_2)
+        case "3": return CGKeyCode(kVK_ANSI_3)
+        case "4": return CGKeyCode(kVK_ANSI_4)
+        case "5": return CGKeyCode(kVK_ANSI_5)
+        case "6": return CGKeyCode(kVK_ANSI_6)
+        case "7": return CGKeyCode(kVK_ANSI_7)
+        case "8": return CGKeyCode(kVK_ANSI_8)
+        case "9": return CGKeyCode(kVK_ANSI_9)
+        case " ": return CGKeyCode(kVK_Space)
+        case "-": return CGKeyCode(kVK_ANSI_Minus)
+        case "=": return CGKeyCode(kVK_ANSI_Equal)
+        case "[": return CGKeyCode(kVK_ANSI_LeftBracket)
+        case "]": return CGKeyCode(kVK_ANSI_RightBracket)
+        case ";": return CGKeyCode(kVK_ANSI_Semicolon)
+        case "'": return CGKeyCode(kVK_ANSI_Quote)
+        case ",": return CGKeyCode(kVK_ANSI_Comma)
+        case ".": return CGKeyCode(kVK_ANSI_Period)
+        case "/": return CGKeyCode(kVK_ANSI_Slash)
+        case "\\": return CGKeyCode(kVK_ANSI_Backslash)
+        case "`": return CGKeyCode(kVK_ANSI_Grave)
+        default: return 0
+        }
+    }
+
     private static func postUnicodeChunk(_ text: String) {
         #if DEBUG
         _testChunkSizes.append(text.count)
         #endif
         guard source != nil else { return }            // Layer 2: never post unstamped (see postSelectLeft)
         let utf16 = Array(text.utf16)
-        guard let down = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true)
+        let vk: CGKeyCode = (text.count == 1 && text.first != nil) ? keyCodeForAscii(text.first!) : 0
+        guard let down = CGEvent(keyboardEventSource: source, virtualKey: vk, keyDown: true)
         else { return }
         // Explicitly EMPTY flags: a unicode insert must never carry (or inherit)
         // a modifier. Chromium applies the shift bit it last saw to the inserted
@@ -2381,14 +2441,7 @@ enum SyntheticKeyboard {
         utf16.withUnsafeBufferPointer { buf in
             down.keyboardSetUnicodeString(stringLength: buf.count, unicodeString: buf.baseAddress)
         }
-        // Task B2 (experimental, default OFF): skip the keyUp on unicode inserts — post
-        // only the keyDown carrying the string, halving posted events per insert. The
-        // accounting stays balanced: the tap mask is keyDown-only, and the in-flight
-        // counter tracks/observes keyDowns only, so a dropped keyUp is never counted and
-        // never awaited. Unlike a virtual Delete (postVirtual, where the up matters for
-        // key-repeat semantics), a unicode-string keyUp carries no repeat behaviour.
-        let up = AppState.shared.tapSkipSyntheticKeyUp
-            ? nil : CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
+        let up = CGEvent(keyboardEventSource: source, virtualKey: vk, keyDown: false)
         if let up {
             up.flags = []
             utf16.withUnsafeBufferPointer { buf in
@@ -3933,7 +3986,7 @@ final class TerminalTapController {
         // VNI: digits carry the diacritics, so they belong to the WORD, not the boundary
         // (same fix as the IMKit path — issue #28, 2026-07-27).
         guard let ascii = ch.asciiValue,
-              isWordKey(ascii, vniMode: engine.vniMode,
+              isWordKey(ascii, vniMode: engine.vniMode || engine.vniEnabled,
                         bracketVowels: engine.bracketVowels,
                         keypad: isKeypadDigitKeyCode(keyCode)) else {
             lastTapKeyWasBoundary = true
@@ -4061,7 +4114,7 @@ final class TerminalTapController {
         // nearly every key — stop at .notCandidate: no log, no AX.
         switch ReEditTapGate.verdict(
             engineIsEmpty: engine.isEmpty, reEditEnabled: AppState.shared.reEditWord,
-            isDiacriticKey: TelexInputController.isDiacriticOnlyKey(ascii, vni: engine.vniMode),
+            isDiacriticKey: TelexInputController.isDiacriticOnlyKey(ascii, vni: engine.vniMode || engine.vniEnabled, telex: engine.telexEnabled),
             emitMode: emitMode,
             lastKeyWasBoundary: lastTapKeyWasBoundary,
             afterNavigationKey: afterNavKey, msSinceNavigation: msSincePrevKey,

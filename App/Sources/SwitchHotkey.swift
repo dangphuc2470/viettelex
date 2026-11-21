@@ -90,24 +90,12 @@ enum SwitchHotkey {
     /// MAIN thread only (TIS không an toàn ngoài main — ràng buộc đã ghi ở self-heal
     /// của tap). Đổi chiều theo trạng thái hiện tại.
     static func toggle() {
-        // Hotkey modifier-only KHÔNG có keyDown nào nên StickyInputSource sẽ không
-        // thấy "gesture chủ động" và giành ngược lại ngay sau khi mình chuyển —
-        // stamp thủ công trước khi đổi source.
         StickyInputSource.shared.noteUserModifierChord()
-        let ok: Bool
-        let direction: String
-        if TelexInputController.isVietTelexSelected() {
-            let dest = lastOtherSourceID ?? fallbackOtherID
-            ok = selectInputSource(id: dest)
-            direction = "→ \(dest)"
-        } else {
-            ok = SecureInputMonitor.reselectVietTelex()
-            direction = "→ VietTelex"
-        }
-        DebugLog.log("switch-hotkey: toggle \(direction) \(ok ? "ok" : "FAILED")")
-        if !ok {
-            Signposts.log.notice("switch-hotkey toggle FAILED \(direction, privacy: .public)")
-        }
+        let newState = !AppState.shared.vietnameseEnabled
+        AppState.shared.vietnameseEnabled = newState
+        NotificationCenter.default.post(name: .telexResetComposition, object: nil)
+        VietnameseModeHUD.show(vietnamese: newState)
+        DebugLog.log("switch-hotkey: toggled vietnameseEnabled → \(newState)")
     }
 
     /// Chọn input source theo đúng kTISPropertyInputSourceID. Chỉ nguồn đang enabled

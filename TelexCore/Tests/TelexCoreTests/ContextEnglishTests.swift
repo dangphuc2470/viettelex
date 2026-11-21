@@ -396,6 +396,14 @@ final class ContextEnglishFieldReportTests: XCTestCase {
         XCTAssertEqual(sentence("it is", context: true), "it is")
         XCTAssertEqual(sentence("the position is", context: true), "the position is")
     }
+
+    /// "build barn" → "build bản" instead of "build barn". "barn" was removed from
+    /// the ambiguous table so technical phrases ("build bản mới", "test bản vá")
+    /// stay Vietnamese.
+    func testBuildBarnStaysVietnameseBan() {
+        XCTAssertEqual(sentence("build barn", context: true), "build bản")
+        XCTAssertEqual(sentence("Em mowis suwra theem vaf build barn", context: true), "Em mới sửa thêm và build bản")
+    }
 }
 
 // "dạa" is Vietnamese for the cross-word context: after it, an ambiguous word stays

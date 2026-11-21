@@ -1039,7 +1039,7 @@ final class TelexInputController: IMKInputController {
         // boundary as before (field report issue #28, 2026-07-27: VNI did nothing in the
         // app because every digit was consumed here — engine-level VNI tests all passed).
         guard let chars = effectiveCharacters(event), var ch = chars.first, let ascii = ch.asciiValue,
-              isWordKey(ascii, vniMode: engine.vniMode,
+              isWordKey(ascii, vniMode: engine.vniMode || engine.vniEnabled,
                         bracketVowels: engine.bracketVowels,
                         keypad: isKeypadDigitKeyCode(Int(event.keyCode))) else {
             // space / punctuation / any non-letter ends the word. Brackets signal a
@@ -1265,7 +1265,7 @@ final class TelexInputController: IMKInputController {
         // RE-EDIT ("Fix tones of typed words", default ON): a tone/mark key on an EMPTY engine right after a
         // word means "add this diacritic to that word" ("toan" + s → toán). Seed the
         // engine from the text on screen so the normal replace machinery does the edit.
-        if engine.isEmpty, AppState.shared.reEditWord, Self.isDiacriticOnlyKey(ascii, vni: engine.vniMode) {
+        if engine.isEmpty, AppState.shared.reEditWord, Self.isDiacriticOnlyKey(ascii, vni: engine.vniMode || engine.vniEnabled, telex: engine.telexEnabled) {
             if tracking, selToClear == 0, !afterRawInsert {
                 tryReEditWord(caret: anchor, client, id: id)
             } else {
@@ -1565,8 +1565,9 @@ final class TelexInputController: IMKInputController {
     /// the digits. The doubler letters (a e o d) are deliberately NOT here: they are
     /// ordinary letters too, so a plain "ca" + "a" keeps behaving exactly as before and
     /// re-edit costs a text read-back only on keys that are unambiguously modifiers.
-    static func isDiacriticOnlyKey(_ ascii: UInt8, vni: Bool) -> Bool {
-        if vni { return isAsciiDigit(ascii) }
+    static func isDiacriticOnlyKey(_ ascii: UInt8, vni: Bool, telex: Bool = true) -> Bool {
+        if vni, isAsciiDigit(ascii) { return true }
+        guard telex else { return false }
         switch ascii | 0x20 {                     // fold case
         case UInt8(ascii: "s"), UInt8(ascii: "f"), UInt8(ascii: "r"), UInt8(ascii: "x"),
              UInt8(ascii: "j"), UInt8(ascii: "z"), UInt8(ascii: "w"):
@@ -3231,6 +3232,17 @@ final class TelexInputController: IMKInputController {
         // hai dòng "VietTelex" + "VietTelex 1.6.x" thừa). Version vẫn ở Cài đặt →
         // Giới thiệu và dòng đầu của snapshot debug (bấm "Chế độ gõ").
         let menu = NSMenu(title: "VietTelex")
+
+        let isVI = AppState.shared.vietnameseEnabled
+        let viItem = NSMenuItem(
+            title: isVI ? VTLocalized("Tiếng Việt (Telex + VNI)") : VTLocalized("Tiếng Anh (VNI luôn bật)"),
+            action: #selector(toggleVietnameseMode(_:)),
+            keyEquivalent: ""
+        )
+        viItem.target = self
+        viItem.state = isVI ? .on : .off
+        menu.addItem(viItem)
+        menu.addItem(NSMenuItem.separator())
         // NO delegate / no stripping of the system "Edit Text Substitutions…" item any
         // more: macOS 27's TextInputMenuAgent builds its item views from the menu
         // BEFORE our delegate edits it, so removing items mid-open left the views off
@@ -3330,6 +3342,13 @@ final class TelexInputController: IMKInputController {
     /// Thứ tự các mục sau dòng trạng thái / cập nhật — test giữ đúng vị trí.
     static func menuItemKeys(textToolsInMenu: Bool) -> [String] {
         (textToolsInMenu ? [toolsItemKey] : []) + [typingModeItemKey, settingsItemKey, inputSourcesItemKey]
+    }
+
+    @objc private func toggleVietnameseMode(_ sender: Any?) {
+        let newState = !AppState.shared.vietnameseEnabled
+        AppState.shared.vietnameseEnabled = newState
+        dropComposition(cause: "mode-toggle")
+        VietnameseModeHUD.show(vietnamese: newState)
     }
 
     @objc private func openSystemKeyboardSettings(_ sender: Any?) {

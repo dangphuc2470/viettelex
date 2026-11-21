@@ -161,7 +161,10 @@ final class SuiteRegressionTests: XCTestCase {
         // "been" is predecessor-gated — English only right after have/has/had/having/'ve
         // ("he been" keeps "bên"; the suite's own notes flag bên as untypeable). Its 3
         // rows (been/Been/BEEN, primed with "he") now keep bên. 629 → 626.
-        XCTAssertGreaterThanOrEqual(ambiguousWithContext, 626,
+        // 16/10/2026: "barn" removed from ambiguous table — collides with very common
+        // Vietnamese word "bản" in technical phrases ("build bản"). Its 3 suite rows
+        // (barn/Barn/BARN) now keep bản. 626 → 623.
+        XCTAssertGreaterThanOrEqual(ambiguousWithContext, 623,
                                     "context coverage of ambiguous words regressed")
     }
 
