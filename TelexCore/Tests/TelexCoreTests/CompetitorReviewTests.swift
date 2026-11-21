@@ -235,6 +235,16 @@ final class CompetitorReviewTests: XCTestCase {
         XCTAssertEqual(commitApp("cuwur"), "cửu")
     }
 
+    /// UniKey UX: Chuyển đổi qua lại giữa ă và â (chă + a -> châ, chăn + a -> chân, chân + w -> chăn)
+    func testUniKeyBreveCircumflexSwitch() {
+        XCTAssertEqual(out("chawa"), "châ")       // chă + a -> châ
+        XCTAssertEqual(out("chawna"), "chân")     // chăn + a -> chân
+        XCTAssertEqual(out("chaana"), "chana")    // aa + a = cancel circumflex + literal a
+        XCTAssertEqual(out("chaanw"), "chăn")     // â + w -> ă (chân + w -> chăn)
+        XCTAssertEqual(out("coonw"), "cơn")       // ô + w -> ơ (côn + w -> cơn)
+        XCTAssertEqual(out("luonw"), "lươn")      // luôn + w -> lươn
+    }
+
     // MARK: - ⌫ trên từ tiếng Anh đã khôi phục
 
     /// Review: xoá lùi trên từ tiếng Anh vừa được khôi phục thì dấu hiện lại. Ở

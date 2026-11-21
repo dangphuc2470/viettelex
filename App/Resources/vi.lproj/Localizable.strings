@@ -137,6 +137,10 @@
 "Missing Accessibility permission" = "Thiếu quyền Trợ năng";
 "Add recent app" = "Thêm app mở gần đây";
 "…or a bundle id" = "…hoặc bundle id";
+"Browse…" = "Chọn từ máy…";
+"Choose" = "Chọn";
+"Select an application to add" = "Chọn ứng dụng để thêm";
+"Could not read application bundle identifier" = "Không đọc được bundle identifier của ứng dụng";
 "Clear & re-learn" = "Xoá & học lại từ đầu";
 "Filter by app name, bundle id, or mode" = "Lọc theo tên app, bundle id, hoặc cơ chế gõ";
 "Empty — type a few Vietnamese words in any app and it will appear here." = "Trống — gõ vài từ tiếng Việt trong app bất kỳ là app sẽ hiện ở đây.";

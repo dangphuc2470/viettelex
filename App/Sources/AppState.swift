@@ -73,6 +73,7 @@ final class AppState: @unchecked Sendable {
         static let manualModes = "manualAppModes"     // user override: bundleID -> AppMode
         static let keyboardLayout = "keyboardLayoutID" // ASCII layout Telex composes on
         static let bracketVowels = "bracketVowels"    // [ → ơ, ] → ư (UniKey habit)
+        static let vietnameseEnabled = "vietnameseEnabled" // Tiếng Việt (Telex) toggle
     }
 
     /// A user-forced per-app handling strategy (Settings → Bảng chế độ gõ). Overrides
@@ -129,10 +130,11 @@ final class AppState: @unchecked Sendable {
         _freeMarking = (defaults.object(forKey: Key.freeMarking) as? Bool) ?? true
         _modernOrthography = (defaults.object(forKey: Key.modernOrthography) as? Bool) ?? false
         _liveSpellCheck = (defaults.object(forKey: Key.liveSpellCheck) as? Bool) ?? true
-        _simpleTelex = (defaults.object(forKey: Key.simpleTelex) as? Bool) ?? false
+        _simpleTelex = (defaults.object(forKey: Key.simpleTelex) as? Bool) ?? true
         _teencode = (defaults.object(forKey: Key.teencode) as? Bool) ?? false
         _quickTelex = (defaults.object(forKey: Key.quickTelex) as? Bool) ?? false
         _vniMode = (defaults.object(forKey: Key.vniMode) as? Bool) ?? false
+        _vietnameseEnabled = (defaults.object(forKey: Key.vietnameseEnabled) as? Bool) ?? true
         // LỊCH SỬ DEFAULT: OFF từ 03/08/2026 (hành vi đổi cách gõ diện rộng, user
         // chủ động bật). Bật ON 15/08/2026 (maintainer): sau hai tuần field-use +
         // các fix "position is"/"thiss is"/Enter-giữ-ngữ-cảnh, quyết định theo ngữ
@@ -142,7 +144,7 @@ final class AppState: @unchecked Sendable {
         _collisionPrefersVietnamese = (defaults.object(forKey: Key.collisionPrefersVietnamese) as? Bool) ?? true
         tapNativeFastPath = (defaults.object(forKey: "tapNativeFastPath") as? Bool) ?? true
         _tapModifyEventInPlace = (defaults.object(forKey: "tapModifyEventInPlace") as? Bool) ?? true
-        _tapSkipSyntheticKeyUp = (defaults.object(forKey: "tapSkipSyntheticKeyUp") as? Bool) ?? true
+        _tapSkipSyntheticKeyUp = (defaults.object(forKey: "tapSkipSyntheticKeyUp") as? Bool) ?? false
         // D1 default ON since 2026-07-21 (was opt-in after the v1.2.1 hang scare):
         // field-run for a day with the queueDrained gate + 50ms AX timeout + posted-
         // events fallback and no stalls observed.
@@ -220,10 +222,11 @@ final class AppState: @unchecked Sendable {
     /// and consistent.
     struct EngineFlags {
         var freeMarking = true, modernTone = false, liveSpellCheck = true
-        var simpleTelex = false, quickTelex = false, vniMode = false
+        var simpleTelex = true, quickTelex = false, vniMode = false
         var bracketVowels = false, contextualEnglish = true
         var collisionPrefersVietnamese = true
         var teencode = false
+        var telexEnabled = true, vniEnabled = true
     }
 
     func engineFlags() -> EngineFlags {
@@ -233,13 +236,15 @@ final class AppState: @unchecked Sendable {
                         quickTelex: _quickTelex, vniMode: _vniMode,
                         bracketVowels: _bracketVowels, contextualEnglish: _contextualEnglish,
                         collisionPrefersVietnamese: _collisionPrefersVietnamese,
-                        teencode: _teencode)
+                        teencode: _teencode,
+                        telexEnabled: _vietnameseEnabled,
+                        vniEnabled: true)
         }
     }
 
     /// Sanity net for the snapshot above: every engine toggle must be carried, or a
     /// setting silently stops reaching the engine. Bump when adding a flag.
-    static let engineFlagCount = 10
+    static let engineFlagCount = 12
 
     /// Tone-placement style. false (default) = old style (hòa, thủy); true = modern
     /// (hoà, thuý). See `TelexEngine.modernTone`.
@@ -297,6 +302,15 @@ final class AppState: @unchecked Sendable {
         get { lock.withLock { _vniMode } }
         set { lock.withLock { _vniMode = newValue }
               defaults.set(newValue, forKey: Key.vniMode) }
+    }
+
+    /// Trạng thái bật/tắt Tiếng Việt. Khi tắt: chỉ tắt Telex, còn VNI lúc nào cũng bật.
+    private var _vietnameseEnabled: Bool
+    var vietnameseEnabled: Bool {
+        get { lock.withLock { _vietnameseEnabled } }
+        set { lock.withLock { _vietnameseEnabled = newValue }
+              defaults.set(newValue, forKey: Key.vietnameseEnabled)
+              NotificationCenter.default.post(name: .vietnameseModeChanged, object: nil) }
     }
 
     /// Gate cho HAI hành vi "với ngược vào từ trước con trỏ":
@@ -1423,6 +1437,10 @@ enum ShortcutImporter {
     }
 }
 
+extension Notification.Name {
+    static let vietnameseModeChanged = Notification.Name("vietnameseModeChanged")
+}
+
 extension TelexEngine {
     /// Push a whole settings snapshot into the engine. Lives here (App target), not in
     /// TelexCore, so the engine package stays free of app types.
@@ -1437,5 +1455,7 @@ extension TelexEngine {
         contextualEnglish = f.contextualEnglish
         collisionPrefersVietnamese = f.collisionPrefersVietnamese
         teencode = f.teencode
+        telexEnabled = f.telexEnabled
+        vniEnabled = f.vniEnabled
     }
 }

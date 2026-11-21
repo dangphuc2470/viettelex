@@ -103,6 +103,16 @@ public struct TelexEngine {
     /// inherent VNI ambiguity every VNI IME has). Preserved across `reset()`.
     public var vniMode = false
 
+    /// Whether Telex rules (tone letters s, f, r, x, j, vowel doublers aa, ee, oo, dd, w)
+    /// are active. When false, letter keys are emitted literally (no Telex transformations),
+    /// but they remain in the word buffer so VNI digits can still apply diacritics.
+    public var telexEnabled = true
+
+    /// Whether VNI input method (digits 1-5 tones, 6-9 marks, 0 clear tone) is active
+    /// alongside or independently of Telex. When true, digit keys inside words are processed
+    /// as VNI diacritics.
+    public var vniEnabled = false
+
     /// Context-based decision (EXPERIMENTAL, default OFF). When the previous committed
     /// word was English, an AMBIGUOUS current word — one whose composition is a valid
     /// Vietnamese syllable but whose raw keys also spell an English word — is restored to
@@ -195,6 +205,8 @@ public struct TelexEngine {
     private var pSimpleTelex = false
     private var pQuickTelex = false
     private var pVniMode = false
+    private var pTelexEnabled = true
+    private var pVniEnabled = false
     private var pBracketVowels = false
     // Snapshot of `liveSpellCheck` the freeze state was computed with. Unlike the
     // other parse settings this one does not change how a single key folds — it
@@ -384,7 +396,7 @@ public struct TelexEngine {
     /// should be routed through `commitBoundary` by the caller.
     public mutating func feed(_ ch: Character) -> TelexAction {
         guard let ascii = ch.asciiValue,
-              isLetter(ascii) || (vniMode && isDigit(ascii))
+              isLetter(ascii) || ((vniMode || vniEnabled) && isDigit(ascii))
                 || (bracketVowels && Self.bracketVowel(ascii) != nil) else {
             return .passthrough
         }
@@ -413,6 +425,7 @@ public struct TelexEngine {
         } else if pProcessed != rawCount - 1
             || pFreeMarking != freeMarking || pSimpleTelex != simpleTelex
             || pQuickTelex != quickTelex || pVniMode != vniMode
+            || pTelexEnabled != telexEnabled || pVniEnabled != vniEnabled
             || pBracketVowels != bracketVowels {
             rebuildFrozenAware()
         } else {
@@ -1016,6 +1029,7 @@ public struct TelexEngine {
     private static let englishExceptions: [[UInt8]] = [
         Array("was".utf8), Array("wow".utf8),
         Array("yes".utf8),   // "ýe" slips through the validator as a syllable
+        Array("away".utf8),
     ]
     /// Generated English-collision table (EnglishCollisions.swift, gen-english):
     /// top-frequency English words whose default-Telex transform yields a VALID
@@ -1641,6 +1655,8 @@ public struct TelexEngine {
         pSimpleTelex = simpleTelex
         pQuickTelex = quickTelex
         pVniMode = vniMode
+        pTelexEnabled = telexEnabled
+        pVniEnabled = vniEnabled
         pBracketVowels = bracketVowels
         pLiveSpellCheck = liveSpellCheck
         for i in 0..<rawCount { rawLetter[i] = -1 }
@@ -1699,10 +1715,16 @@ public struct TelexEngine {
             return
         }
 
-        // VNI: letters literal, digits carry the diacritics. Separate fold entirely —
-        // none of the Telex letter transforms (tone letters, w, doublers, dd) apply.
-        if pVniMode {
+        // VNI diacritic digits (0-9):
+        if (pVniMode || pVniEnabled), isDigit(key) {
             parseStepVNI(at, key: key, lower: lower, upper: upper)
+            return
+        }
+
+        // Pure VNI mode or disabled Telex: letters stay literal (no Telex transforms).
+        if pVniMode || !pTelexEnabled {
+            appendLetter(base: lower, mark: .none, upper: upper)
+            rawLetter[at] = pCount - 1
             return
         }
 
@@ -1839,6 +1861,19 @@ public struct TelexEngine {
                 if p.mark == .none && (p.base == UInt8(ascii: "o") || p.base == UInt8(ascii: "u")) {
                     letters[tIdx].mark = .horn; rawLetter[at] = tIdx; return
                 }
+                // UniKey UX: w trên â → ă ("chân" + w → "chăn")
+                if p.mark == .circumflex && p.base == UInt8(ascii: "a") {
+                    letters[tIdx].mark = .breve; rawLetter[at] = tIdx; return
+                }
+                // UniKey UX: w trên ô → ơ ("côn" + w → "cơn", "luôn" + w → "lươn")
+                if p.mark == .circumflex && p.base == UInt8(ascii: "o") {
+                    letters[tIdx].mark = .horn
+                    if tIdx >= 1, letters[tIdx - 1].base == UInt8(ascii: "u") {
+                        letters[tIdx - 1].mark = .horn
+                    }
+                    rawLetter[at] = tIdx
+                    return
+                }
                 if p.mark == .breve && p.base == UInt8(ascii: "a") {
                     letters[tIdx].mark = .none
                     pCancelled = true
@@ -1894,6 +1929,10 @@ public struct TelexEngine {
                 if lower == UInt8(ascii: "o"), p.base == lower, p.mark == .horn {
                     setCircumflex(pIdx); rawLetter[at] = pIdx; return
                 }
+                // UniKey UX: `a` trên ă (breve) → â (circumflex): "chă" + a → "châ"
+                if lower == UInt8(ascii: "a"), p.base == lower, p.mark == .breve {
+                    setCircumflex(pIdx); rawLetter[at] = pIdx; return
+                }
                 if p.base == lower && p.mark == .circumflex {
                     letters[pIdx].mark = .none
                     pCancelled = true
@@ -1919,7 +1958,8 @@ public struct TelexEngine {
                     // (and the same oeo/oao guard below).
                     if letters[k].base == lower,
                        letters[k].mark == .none
-                           || (lower == UInt8(ascii: "o") && letters[k].mark == .horn) {
+                           || (lower == UInt8(ascii: "o") && letters[k].mark == .horn)
+                           || (lower == UInt8(ascii: "a") && letters[k].mark == .breve) {
                         // "oeo"/"oao" are REAL rimes (ngoèo, khoèo, ngoáo): an `o`
                         // that would fold ACROSS the middle bare e/a is the user
                         // typing the rime's last vowel, not a circumflex — issue
@@ -2081,33 +2121,53 @@ public struct TelexEngine {
         // Mark digits 6/7/8/9. Scan back to the nearest applicable letter (VNI types
         // the digit right after its target; reach-back over a coda handles "viet6"→việt
         // and onset-d "d…9"→đ). Same digit again on an already-marked target cancels.
-        if let mark = Self.vniMark(key) {
+        // 7 và 8 gộp chung: gõ 7 hoặc 8 vào 'a' đều ra 'ă', vào 'o'/'u' đều ra 'ơ'/'ư'.
+        if key == UInt8(ascii: "6") || key == UInt8(ascii: "7") || key == UInt8(ascii: "8") || key == UInt8(ascii: "9") {
             var k = pCount - 1
             while k >= 0 {
-                if Self.vniMarkAccepts(base: letters[k].base, mark: mark) {
-                    // "uu" nucleus: 7 (horn) đặt lên chữ u ĐẦU (→ ưu: lưu, cứu, hưu)
-                    // — "uư" không phải nhân âm tiếng Việt. Cùng luật với w-handler
-                    // Telex ("luuw"→lưu, "luuww"→luuw): predecessor u may already
-                    // be horned so the second 7 CANCELS that ư ("luu77"→luu7), and
-                    // cancel must use `target` not `k` or the leftover u gets
-                    // horned instead. Cùng ngoại lệ "qu". Issue #66 (29/08/2026).
+                if let mark = Self.vniMarkForBase(key: key, base: letters[k].base) {
                     var target = k
-                    if mark == .horn, target >= 1,
-                       letters[target].base == UInt8(ascii: "u"), letters[target].mark == .none,
+                    // "ua" nucleus: 7/8 horns the u (→ ưa: mưa, chưa, cưa)
+                    if (key == UInt8(ascii: "7") || key == UInt8(ascii: "8")), target >= 1,
+                       letters[target].base == UInt8(ascii: "a"), letters[target].mark == .none,
                        letters[target - 1].base == UInt8(ascii: "u"),
+                       uaUuPredecessorAllowsRetarget(target - 1),
                        !(target >= 2 && letters[target - 2].base == UInt8(ascii: "q")) {
                         target -= 1
                     }
+                    // "uu" nucleus: 7/8 horns the first u (→ ưu: lưu, cứu, hưu)
+                    if (key == UInt8(ascii: "7") || key == UInt8(ascii: "8")), target >= 1,
+                       letters[target].base == UInt8(ascii: "u"), letters[target].mark == .none,
+                       letters[target - 1].base == UInt8(ascii: "u"),
+                       uaUuPredecessorAllowsRetarget(target - 1),
+                       !(target >= 2 && letters[target - 2].base == UInt8(ascii: "q")) {
+                        target -= 1
+                    }
+                    let effectiveMark = (target != k) ? (Self.vniMarkForBase(key: key, base: letters[target].base) ?? mark) : mark
                     if letters[target].mark == .none {
-                        letters[target].mark = mark
+                        letters[target].mark = effectiveMark
                         rawLetter[at] = target
                         return
                     }
-                    if letters[target].mark == mark {   // re-applied → cancel, literal digit
+                    if letters[target].mark == effectiveMark {   // re-applied → cancel, literal digit
                         letters[target].mark = .none
                         pCancelled = true
                         appendLetter(base: key, mark: .none, upper: false)
                         rawLetter[at] = pCount - 1
+                        return
+                    }
+                    // UniKey UX: đổi qua lại giữa dấu mũ (6) và dấu trăng/móc (7/8)
+                    if letters[target].mark != effectiveMark {
+                        letters[target].mark = effectiveMark
+                        if effectiveMark == .horn, letters[target].base == UInt8(ascii: "o"), target >= 1,
+                           letters[target - 1].base == UInt8(ascii: "u") {
+                            letters[target - 1].mark = .horn
+                        }
+                        if effectiveMark == .circumflex, letters[target].base == UInt8(ascii: "o"), target >= 1,
+                           letters[target - 1].base == UInt8(ascii: "u") {
+                            letters[target - 1].mark = .none
+                        }
+                        rawLetter[at] = target
                         return
                     }
                     break                                // conflicting mark → literal digit
@@ -2137,6 +2197,33 @@ public struct TelexEngine {
         }
     }
 
+    /// VNI mark digit + base letter → Mark.
+    /// 6 = circumflex (a, e, o)
+    /// 7 & 8 = gộp chung: breve trên a (ă), horn trên o/u (ơ, ư)
+    /// 9 = bar (d → đ)
+    @inline(__always)
+    private static func vniMarkForBase(key: UInt8, base: UInt8) -> Mark? {
+        switch key {
+        case UInt8(ascii: "6"):
+            if base == UInt8(ascii: "a") || base == UInt8(ascii: "e") || base == UInt8(ascii: "o") {
+                return .circumflex
+            }
+        case UInt8(ascii: "7"), UInt8(ascii: "8"):
+            if base == UInt8(ascii: "a") {
+                return .breve
+            } else if base == UInt8(ascii: "o") || base == UInt8(ascii: "u") {
+                return .horn
+            }
+        case UInt8(ascii: "9"):
+            if base == UInt8(ascii: "d") {
+                return .bar
+            }
+        default:
+            return nil
+        }
+        return nil
+    }
+
     /// VNI mark digit → Mark (6 circumflex, 7 horn, 8 breve, 9 bar/đ). nil otherwise.
     @inline(__always)
     private static func vniMark(_ d: UInt8) -> Mark? {
@@ -2155,8 +2242,8 @@ public struct TelexEngine {
     private static func vniMarkAccepts(base: UInt8, mark: Mark) -> Bool {
         switch mark {
         case .circumflex: return base == UInt8(ascii: "a") || base == UInt8(ascii: "e") || base == UInt8(ascii: "o")
-        case .horn:       return base == UInt8(ascii: "o") || base == UInt8(ascii: "u")
-        case .breve:      return base == UInt8(ascii: "a")
+        case .horn:       return base == UInt8(ascii: "o") || base == UInt8(ascii: "u") || base == UInt8(ascii: "a")
+        case .breve:      return base == UInt8(ascii: "a") || base == UInt8(ascii: "o") || base == UInt8(ascii: "u")
         case .bar:        return base == UInt8(ascii: "d")
         case .none:       return false
         }
